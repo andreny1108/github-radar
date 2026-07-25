@@ -25,23 +25,28 @@ export function timeAgo(iso) {
 }
 
 /**
- * 把 star 历史折算成 SVG polyline 的点串（viewBox 100×32）。
+ * 把每周提交数折算成 SVG polyline 的点串（viewBox 100×32）。
  *
- * 走的是"每张卡自己归一化"：把这个仓库自身的最小值贴底、最大值贴顶。
- * 不这么做的话，10 万 star 的项目涨 2000 和 500 star 的项目涨 200，
- * 在同一个绝对坐标系里后者会是一条完全看不出起伏的平线。
+ * 归一化用的是"0 到本仓库峰值"而不是"本仓库最小值到最大值"：
+ * 后者会把一个每周稳定 2 次提交的项目也拉成剧烈起伏的锯齿，看着像很活跃。
+ * 从 0 起算，平稳的项目就是一条低平线，停更的项目直接贴底——一眼能分辨。
  *
- * 数据点少于 3 个返回 null（第一周还没攒够快照），卡片据此不画图。
+ * 数据点少于 4 个返回 null（拿不到统计的仓库），卡片据此不画图。
  */
 export function sparkPoints(values) {
-  if (!values || values.length < 3) return null
+  if (!values || values.length < 4) return null
 
-  const min = Math.min(...values)
   const max = Math.max(...values)
-  const range = max - min || 1
-  const step = 100 / (values.length - 1)
+  if (max === 0) return null // 一年没有任何提交，画条直线没意义
 
+  const step = 100 / (values.length - 1)
   return values
-    .map((v, i) => `${(i * step).toFixed(1)},${(30 - ((v - min) / range) * 28).toFixed(1)}`)
+    .map((v, i) => `${(i * step).toFixed(1)},${(30 - (v / max) * 28).toFixed(1)}`)
     .join(' ')
+}
+
+/** 曲线右端（最近几周）还有没有提交——决定曲线用强调色还是灰色 */
+export function isActive(values) {
+  if (!values?.length) return false
+  return values.slice(-6).some((v) => v > 0)
 }

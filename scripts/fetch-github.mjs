@@ -11,7 +11,14 @@
  */
 
 import { loadEnv, readJson, writeJson, today, daysAgo } from './lib/env.mjs'
-import { searchRepos, getRepo, getReadme, fetchTrending, getRateLimit } from './lib/github.mjs'
+import {
+  searchRepos,
+  getRepo,
+  getReadme,
+  fetchTrending,
+  getRateLimit,
+  getCommitActivity,
+} from './lib/github.mjs'
 import { pushStarHistory, starDelta } from './lib/stars.mjs'
 import { mapPool } from './lib/pool.mjs'
 import { classifyByRules } from './taxonomy.mjs'
@@ -23,6 +30,7 @@ const MIN_STARS = 200        // 收录门槛
 const MIN_STARS_NEW = 100    // 新项目门槛放宽（还没来得及涨星）
 const NEW_WINDOW_DAYS = 180  // "新项目"的时间窗
 const README_CONCURRENCY = 6 // README 抓取并发数，详见 lib/pool.mjs
+const ACTIVITY_TTL_DAYS = 7  // 活跃度曲线的刷新周期
 
 /**
  * Topic 搜索列表 —— 这一份列表直接决定了池子里有什么。
@@ -226,7 +234,46 @@ async function main() {
     console.log(`   规则命中 ${ruleHit}/${newRepoIds.length}（${pct(ruleHit, newRepoIds.length)}），其余交给 AI 兜底`)
   }
 
-  // ── 4. 标记沉寂项目 ──
+  // ── 4. 抓活跃度曲线（近一年每周提交数）──
+  // 每周刷一次就够：提交数按周聚合，天天抓也不会变，纯属浪费配额。
+  const activity = readJson('data/activity.json', {})
+  const activityCutoff = daysAgo(ACTIVITY_TTL_DAYS)
+  const needActivity = Object.values(repos)
+    .filter((r) => !r.archived)
+    .filter((r) => !activity[r.id] || (activity[r.id].at ?? '') < activityCutoff)
+    .map((r) => r.id)
+
+  if (needActivity.length) {
+    console.log(`\n📈 抓活跃度曲线 ${needActivity.length} 个（缓存 ${ACTIVITY_TTL_DAYS} 天）…`)
+    let got = 0
+    let lastLogged = 0
+    await mapPool(needActivity, README_CONCURRENCY, async (id) => {
+      const weeks = await getCommitActivity(id)
+      if (weeks.length) {
+        // 只留最近 26 周：一年的点画进 100px 宽会糊成一团，半年颗粒度刚好
+        activity[id] = { at: date, w: weeks.slice(-26) }
+        got++
+      } else {
+        // 拿不到也记一笔，免得每次跑都对着同一批失败的重试
+        activity[id] = { at: date, w: [] }
+      }
+    }, (done, total) => {
+      if (done - lastLogged >= 300 || done === total) {
+        lastLogged = done
+        console.log(`   进度 ${done}/${total}`)
+      }
+    })
+    console.log(`   拿到曲线 ${got}/${needActivity.length}`)
+  } else {
+    console.log(`\n📈 活跃度曲线都在 ${ACTIVITY_TTL_DAYS} 天缓存内，跳过`)
+  }
+
+  for (const id of Object.keys(activity)) {
+    if (!repos[id]) delete activity[id]
+  }
+  writeJson('data/activity.json', activity)
+
+  // ── 5. 标记沉寂项目 ──
   const staleCutoff = daysAgo(180)
   let archivedCount = 0
   for (const repo of Object.values(repos)) {

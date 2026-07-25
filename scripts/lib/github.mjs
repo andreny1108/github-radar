@@ -146,6 +146,41 @@ export async function fetchTrending(since = 'weekly') {
   }
 }
 
+/**
+ * 近一年每周的提交数（52 个点），用来画卡片上的活跃度曲线。
+ *
+ * 为什么不画 star 曲线：GitHub 对 stargazers 接口的深翻页直接返回 403，
+ * 拿不到历史 star 的时间线；自己按天记快照又要攒很久才有形状。
+ * 提交数是一次请求就能拿到一年真实数据，而且"这项目还有没有人在维护"
+ * 本身就是比几天 star 波动更有用的信号。
+ *
+ * 注意：仓库统计是 GitHub 后台异步算的，第一次请求可能返回 202（正在计算），
+ * 要等一会儿重试。空仓库或统计还没生成时返回空数组。
+ */
+export async function getCommitActivity(fullName, { retries = 3 } = {}) {
+  const url = `${API}/repos/${fullName}/stats/commit_activity`
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let res
+    try {
+      res = await fetch(url, { headers: headers() })
+    } catch {
+      return []
+    }
+
+    if (res.status === 202) {
+      // 后台正在算，等它一下。等不到就放弃——下次跑还会再试
+      await sleep(1500 * (attempt + 1))
+      continue
+    }
+    if (!res.ok) return []
+
+    const data = await res.json().catch(() => null)
+    if (!Array.isArray(data)) return []
+    return data.map((w) => w.total ?? 0)
+  }
+  return []
+}
+
 /** 查当前剩余配额，用于开跑前的自检。 */
 export async function getRateLimit() {
   const data = await request(`${API}/rate_limit`)

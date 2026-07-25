@@ -9,11 +9,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { ROOT, readJson, writeJson, today } from './lib/env.mjs'
-import { starDelta, recentStars } from './lib/stars.mjs'
+import { starDelta } from './lib/stars.mjs'
 import { CATEGORIES } from './taxonomy.mjs'
 
 const store = readJson('data/repos.json', { repos: {} })
 const all = Object.values(store.repos ?? {})
+// 活跃度曲线（近 26 周每周提交数），卡片上那条线画的就是它
+const activity = readJson('data/activity.json', {})
 
 if (!all.length) {
   console.error('❌ data/repos.json 是空的，请先跑 npm run fetch')
@@ -39,7 +41,7 @@ const repos = active.map((r) => ({
   seen: r.firstSeen,
   d7: starDelta(r, 7),   // 本周新增 star，null = 历史不足（第一天运行时全是 null）
   d30: starDelta(r, 30),
-  sp: recentStars(r, 8), // star 走势迷你图的数据点，不足 3 天为空数组
+  act: activity[r.id]?.w ?? [], // 近 26 周每周提交数，卡片曲线
 }))
 
 // 默认按本周新增排序，前端切换排序时无需重排整个数组

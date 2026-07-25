@@ -1,4 +1,4 @@
-import { formatStars, formatDelta, timeAgo, sparkPoints } from '../lib/format.js'
+import { formatStars, formatDelta, timeAgo, sparkPoints, isActive } from '../lib/format.js'
 
 /**
  * 蓝图风格的项目卡片。
@@ -6,7 +6,8 @@ import { formatStars, formatDelta, timeAgo, sparkPoints } from '../lib/format.js
  */
 export default function RepoCard({ repo, categoryName }) {
   const up = repo.d7 !== null && repo.d7 > 0
-  const points = sparkPoints(repo.sp)
+  const points = sparkPoints(repo.act)
+  const active = isActive(repo.act)
 
   return (
     <a
@@ -54,19 +55,31 @@ export default function RepoCard({ repo, categoryName }) {
         </span>
       </div>
 
-      {/* 走势图只在攒够 3 天快照后才画：两个点是条直线，没信息量还占地方 */}
-      {points && (
-        <svg viewBox="0 0 100 32" style={{ width: '100%', height: 32, display: 'block' }} aria-hidden="true">
-          <polyline
-            points={points}
-            fill="none"
-            stroke={up ? 'var(--color-accent)' : 'var(--color-neutral-500)'}
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      )}
+      {/* 活跃度曲线：近 26 周每周提交数。最近半年没提交的画成灰色，一眼看出烂尾项目。
+          拿不到统计的仓库（新建的、空的）不画，留空位保持卡片高度一致。 */}
+      <div style={{ height: 32 }} title={points ? '近半年每周提交数' : undefined}>
+        {points && (
+          <svg
+            viewBox="0 0 100 32"
+            // 默认的等比缩放会让 100×32 的 viewBox 在 280×32 的容器里
+            // 只占 100px 宽然后居中；none 才会横向拉满
+            preserveAspectRatio="none"
+            style={{ width: '100%', height: 32, display: 'block' }}
+            aria-hidden="true"
+          >
+            <polyline
+              points={points}
+              fill="none"
+              stroke={active ? 'var(--color-accent)' : 'var(--color-neutral-400)'}
+              strokeWidth="1.5"
+              // 横向拉伸会把竖线抻粗、横线压细，这个属性让线宽不受缩放影响
+              vectorEffect="non-scaling-stroke"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
+      </div>
 
       <div className="card-meta" style={{ justifyContent: 'space-between' }}>
         <span title={`最后提交 ${repo.pushed}`}>更新于 {timeAgo(repo.pushed)}</span>

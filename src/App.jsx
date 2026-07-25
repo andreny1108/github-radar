@@ -83,6 +83,22 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-text)' }}>
+      {/* 活跃度曲线的面积渐变。全局定义一次、各卡片按 id 引用——
+          三千张卡各自内联一份 <defs> 纯属浪费。
+          stop-color 写在 style 里而不是属性上，属性形式不解析 CSS 变量。 */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+        <defs>
+          <linearGradient id="spark-on" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" style={{ stopColor: 'var(--color-accent)', stopOpacity: 0.3 }} />
+            <stop offset="100%" style={{ stopColor: 'var(--color-accent)', stopOpacity: 0 }} />
+          </linearGradient>
+          <linearGradient id="spark-off" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" style={{ stopColor: 'var(--color-neutral-400)', stopOpacity: 0.28 }} />
+            <stop offset="100%" style={{ stopColor: 'var(--color-neutral-400)', stopOpacity: 0 }} />
+          </linearGradient>
+        </defs>
+      </svg>
+
       {/* 原设计稿是 1240px 定宽（它只有 14 个假数据，窄一点更好看）。
           真实站有近三千个项目，宽屏下留两条大白边纯属浪费——放宽到 1720px，
           1440 屏能排 4 列、1920 屏 5 列。再宽就不放了：卡片行太长，

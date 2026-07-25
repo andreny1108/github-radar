@@ -1,4 +1,4 @@
-import { formatStars, formatDelta, timeAgo, sparkPoints, isActive } from '../lib/format.js'
+import { formatStars, formatDelta, timeAgo, sparkPath, isActive } from '../lib/format.js'
 
 /**
  * 蓝图风格的项目卡片。
@@ -6,7 +6,7 @@ import { formatStars, formatDelta, timeAgo, sparkPoints, isActive } from '../lib
  */
 export default function RepoCard({ repo, categoryName }) {
   const up = repo.d7 !== null && repo.d7 > 0
-  const points = sparkPoints(repo.act)
+  const spark = sparkPath(repo.act)
   const active = isActive(repo.act)
 
   return (
@@ -57,8 +57,8 @@ export default function RepoCard({ repo, categoryName }) {
 
       {/* 活跃度曲线：近 26 周每周提交数。最近半年没提交的画成灰色，一眼看出烂尾项目。
           拿不到统计的仓库（新建的、空的）不画，留空位保持卡片高度一致。 */}
-      <div style={{ height: 32 }} title={points ? '近半年每周提交数' : undefined}>
-        {points && (
+      <div style={{ height: 32 }} title={spark ? '近半年每周提交数' : undefined}>
+        {spark && (
           <svg
             viewBox="0 0 100 32"
             // 默认的等比缩放会让 100×32 的 viewBox 在 280×32 的容器里
@@ -67,8 +67,11 @@ export default function RepoCard({ repo, categoryName }) {
             style={{ width: '100%', height: 32, display: 'block' }}
             aria-hidden="true"
           >
-            <polyline
-              points={points}
+            {/* 先铺面积再压折线：32px 高的小图里光一条细线太弱，
+                填充之后趋势的"体量感"才出得来 */}
+            <path d={spark.area} fill={`url(#${active ? 'spark-on' : 'spark-off'})`} stroke="none" />
+            <path
+              d={spark.line}
               fill="none"
               stroke={active ? 'var(--color-accent)' : 'var(--color-neutral-400)'}
               strokeWidth="1.5"

@@ -103,6 +103,11 @@ export async function getReadme(fullName, maxChars = 3000) {
  */
 function stripMarkdownNoise(md) {
   return md
+    // 先清掉落单的代理对和控制字符。README 里 emoji 很多，后面按字符数截断时
+    // 很容易从代理对中间切开，留下的半个字符会让 JSON 序列化产生非法转义。
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '')
+    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')
     .replace(/<!--[\s\S]*?-->/g, '')           // HTML 注释
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')      // 图片（badge 全在这）
     .replace(/<img[^>]*>/gi, '')

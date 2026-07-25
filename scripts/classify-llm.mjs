@@ -35,7 +35,8 @@ const PROVIDERS = {
     label: 'DeepSeek',
     baseURL: 'https://api.deepseek.com',
     keyEnv: 'DEEPSEEK_API_KEY',
-    defaultModel: 'deepseek-chat',
+    // 分类 + 短摘要用 flash 足够；要更好的中文表达可换 deepseek-v4-pro
+    defaultModel: 'deepseek-v4-flash',
     console: 'https://platform.deepseek.com/api_keys',
   },
   qwen: {
@@ -97,6 +98,28 @@ ${CATEGORY_MENU}
 
 必须为输入的每一个 id 返回一条结果。`
 
+/**
+ * 只补中文摘要用的精简 prompt。
+ * 分类已经由规则引擎判好了，不需要再把分类说明塞进去——
+ * 省掉那一大段后每条的输入 token 少一半，同一批能多塞一倍项目。
+ */
+const SYSTEM_SUMMARY_ONLY = `你是一个 GitHub 开源项目的介绍助手，服务对象是中文用户。
+
+给你一批项目（仓库名、英文描述、topics、README 摘要），为每个写一句 25~40 字的中文介绍。
+
+要求：
+- 说清楚"这个东西解决什么问题、给谁用"，不要直译英文描述
+- 用大白话，别堆术语。反例："基于 Transformer 架构的高性能推理框架"
+  正例："让大模型在自己电脑上跑起来，速度比原版快好几倍"
+- 不要用"这是一个""该项目"开头，直接说功能
+- 不要出现 emoji、markdown 标记、引号
+- 信息太少就基于仓库名和描述做最合理的推断，不要写"未知"
+
+只输出一个 JSON 对象，不要有任何其他文字、不要用 markdown 代码块包裹：
+{"results":[{"id":"原样返回不要改写","summaryZh":"中文介绍"}]}
+
+必须为输入的每一个 id 返回一条结果。`
+
 async function main() {
   const store = readJson('data/repos.json', { repos: {} })
   const repos = store.repos ?? {}
@@ -151,12 +174,26 @@ async function main() {
     }
   }
 
-  const pending = allRepos.filter((r) => r.categorySource === 'pending')
+  // 'fallback' 的语义是"当时没有可用的大模型才退回规则猜测"，
+  // 所以一旦配上 key 就该重判——不把它纳进来的话，先无 key 跑过一次的项目
+  // 会永远停在猜测状态，key 配了也不生效。
+  const pending = allRepos.filter(
+    (r) => r.categorySource === 'pending' || r.categorySource === 'fallback',
+  )
+
+  // --summaries：给规则已判好分类、但还没有中文摘要的项目补摘要。
+  // 不补的话卡片上会显示英文原描述——规则命中率越高，英文卡片越多。
+  const summaryOnly = process.argv.includes('--summaries')
+  const needSummary = summaryOnly
+    ? allRepos.filter((r) => !r.archived && !r.summaryZh && r.categorySource === 'rule')
+    : []
   console.log(`🏷️  规则已确定 ${allRepos.filter((r) => r.categorySource === 'rule').length} 个`)
   console.log(`💾 缓存命中 ${cacheHits} 个`)
-  console.log(`🤖 待大模型处理 ${pending.length} 个\n`)
+  console.log(`🤖 待分类 ${pending.length} 个`)
+  if (summaryOnly) console.log(`✍️  待补中文摘要 ${needSummary.length} 个`)
+  console.log()
 
-  if (!pending.length) {
+  if (!pending.length && !needSummary.length) {
     finish(store, repos, cache)
     return
   }
@@ -185,10 +222,16 @@ async function main() {
   // ── 3. 批量调用 ──
   const model = process.env.LLM_MODEL ?? provider.defaultModel
   const client = new OpenAI({ apiKey, baseURL: provider.baseURL, maxRetries: 3, timeout: 120_000 })
-  const batches = chunk(pending, BATCH_SIZE)
+
+  // 两种任务混在一个队列里跑：分类（要判分类+写摘要）和纯补摘要。
+  // 补摘要的 prompt 短，每批能多塞一倍。
+  const jobs = [
+    ...chunk(pending, BATCH_SIZE).map((batch) => ({ batch, mode: 'classify' })),
+    ...chunk(needSummary, BATCH_SIZE * 2).map((batch) => ({ batch, mode: 'summary' })),
+  ]
 
   console.log(`厂商 ${provider.label}，模型 ${model}`)
-  console.log(`共 ${batches.length} 批（每批 ${BATCH_SIZE} 个，${CONCURRENCY} 路并发）\n`)
+  console.log(`共 ${jobs.length} 批，${CONCURRENCY} 路并发\n`)
 
   const stats = { done: 0, failed: 0, input: 0, output: 0, batchesDone: 0 }
   let cursor = 0
@@ -196,11 +239,11 @@ async function main() {
   async function worker() {
     while (true) {
       const i = cursor++
-      if (i >= batches.length) return
-      await runBatch(client, model, batches[i], cache, stats, readmes)
+      if (i >= jobs.length) return
+      await runBatch(client, model, jobs[i], cache, stats, readmes)
       stats.batchesDone++
       console.log(
-        `   ${String(stats.batchesDone).padStart(3)}/${batches.length} 批完成` +
+        `   ${String(stats.batchesDone).padStart(3)}/${jobs.length} 批完成` +
           `（成功 ${stats.done}，失败 ${stats.failed}）`,
       )
       await sleep(300)
@@ -228,18 +271,21 @@ async function main() {
 
 // ── 单批处理 ──────────────────────────────────────────────────
 
-async function runBatch(client, model, batch, cache, stats, readmes) {
+async function runBatch(client, model, job, cache, stats, readmes) {
+  const { batch, mode } = job
+  const isSummaryOnly = mode === 'summary'
+
   try {
     const completion = await client.chat.completions.create({
       model,
       messages: [
-        { role: 'system', content: SYSTEM },
-        { role: 'user', content: buildPrompt(batch, readmes) },
+        { role: 'system', content: isSummaryOnly ? SYSTEM_SUMMARY_ONLY : SYSTEM },
+        { role: 'user', content: buildPrompt(batch, readmes, isSummaryOnly) },
       ],
       // 各家对 json_object 的支持程度不一，所以还是要自己兜底解析
       response_format: { type: 'json_object' },
       temperature: 0.3,
-      max_tokens: 3000,
+      max_tokens: isSummaryOnly ? 4000 : 3000,
     })
 
     if (completion.usage) {
@@ -252,14 +298,21 @@ async function runBatch(client, model, batch, cache, stats, readmes) {
 
     for (const repo of batch) {
       const result = byId.get(repo.id)
-      // 分类必须落在合法枚举里——模型偶尔会自创分类名或返回中文名
-      if (!result || !VALID.has(result.category) || !result.summaryZh) {
+      if (!result?.summaryZh) {
         stats.failed++
         continue
       }
-      repo.category = result.category
+      // 补摘要模式不动分类；分类模式下分类必须落在合法枚举里
+      // ——模型偶尔会自创分类名或返回中文名
+      if (!isSummaryOnly) {
+        if (!VALID.has(result.category)) {
+          stats.failed++
+          continue
+        }
+        repo.category = result.category
+        repo.categorySource = 'ai'
+      }
       repo.summaryZh = String(result.summaryZh).trim().slice(0, 60)
-      repo.categorySource = 'ai'
       cache[repo.id] = { category: repo.category, summaryZh: repo.summaryZh }
       stats.done++
     }
@@ -304,17 +357,35 @@ function parseResults(text) {
 
 // ── 工具函数 ──────────────────────────────────────────────────
 
-function buildPrompt(batch, readmes) {
+/**
+ * 清掉会让 JSON 序列化炸掉的字符。
+ *
+ * 踩过的坑：README 摘要是按字符数 slice 出来的，正好从 emoji 中间切断时会留下
+ * 半个代理对（lone surrogate）。它序列化成 \udXXX 是非法 JSON，服务端直接
+ * 400 "unexpected end of hex escape"，整批 12 个项目一起失败。
+ * 顺手也清掉控制字符——有些 README 里混着终端转义序列。
+ */
+function sanitize(text) {
+  return text
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '') // 落单的高位代理
+    .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '') // 落单的低位代理
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ') // 控制字符
+}
+
+function buildPrompt(batch, readmes, isSummaryOnly = false) {
+  // 补摘要模式不需要那么多 README 上下文，截短一半再省点 token
+  const readmeLimit = isSummaryOnly ? 500 : 1000
+
   const body = batch
     .map((repo, i) => {
       const parts = [
         `## ${i + 1}. id: ${repo.id}`,
         `star: ${repo.stars}｜语言: ${repo.language ?? '未知'}`,
         `topics: ${(repo.topics ?? []).slice(0, 12).join(', ') || '无'}`,
-        `描述: ${repo.description || '无'}`,
+        `描述: ${sanitize(repo.description || '无')}`,
       ]
       const readme = readmes[repo.id]
-      if (readme) parts.push(`README 摘要: ${readme.slice(0, 1000)}`)
+      if (readme) parts.push(`README 摘要: ${sanitize(readme.slice(0, readmeLimit))}`)
       return parts.join('\n')
     })
     .join('\n\n')

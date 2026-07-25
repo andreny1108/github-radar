@@ -83,7 +83,11 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-text)' }}>
-      <div className="gr-container" style={{ maxWidth: 1240, margin: '0 auto', padding: 'var(--space-4) var(--space-6) 80px' }}>
+      {/* 原设计稿是 1240px 定宽（它只有 14 个假数据，窄一点更好看）。
+          真实站有近三千个项目，宽屏下留两条大白边纯属浪费——放宽到 1720px，
+          1440 屏能排 4 列、1920 屏 5 列。再宽就不放了：卡片行太长，
+          眼睛从行尾扫回行首会找不着位置。 */}
+      <div className="gr-container" style={{ maxWidth: 1720, margin: '0 auto', padding: 'var(--space-4) var(--space-8) 80px' }}>
         <div className="nav gr-nav" style={{ paddingInline: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
             <div

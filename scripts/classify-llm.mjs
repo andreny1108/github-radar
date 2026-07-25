@@ -61,7 +61,7 @@ const PROVIDERS = {
   },
 }
 
-const PROVIDER_ID = process.env.LLM_PROVIDER ?? 'volcengine'
+const PROVIDER_ID = process.env.LLM_PROVIDER ?? 'deepseek'
 const provider = PROVIDERS[PROVIDER_ID]
 const BATCH_SIZE = Number(process.env.BATCH_SIZE ?? 12)
 const CONCURRENCY = 3 // 同时跑几个批次，太高容易触发各家的 QPS 限制

@@ -50,7 +50,7 @@ npm run data      # ③ 生成前端数据 → public/data/repos.json
 ```env
 GH_API_TOKEN=github_pat_xxxxx
 
-LLM_PROVIDER=volcengine     # volcengine / deepseek / qwen / zhipu / moonshot
+LLM_PROVIDER=deepseek       # deepseek / volcengine / qwen / zhipu / moonshot
 LLM_API_KEY=xxxxx
 # LLM_MODEL=               # 不填用各家默认型号
 ```
@@ -58,7 +58,7 @@ LLM_API_KEY=xxxxx
 | 变量 | 必需 | 说明 |
 |---|---|---|
 | `GH_API_TOKEN` | 强烈建议 | GitHub fine-grained PAT，权限只要 **Public repositories (read-only)**。没有它每小时只能查 60 次，不够抓几千个项目 |
-| `LLM_PROVIDER` | — | 大模型厂商，默认 `volcengine`（火山方舟） |
+| `LLM_PROVIDER` | — | 大模型厂商，默认 `deepseek` |
 | `LLM_API_KEY` | 场景分类需要 | 见下方说明 |
 | `LLM_MODEL` | — | 覆盖默认型号。各家会更新型号，报 404 就是这里要改 |
 

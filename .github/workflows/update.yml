@@ -50,7 +50,7 @@ jobs:
       - name: 大模型场景分类与中文摘要
         env:
           # 没配这两个 secret 也不会失败，脚本会自动降级为规则分类
-          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'volcengine' }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'deepseek' }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: node scripts/classify-llm.mjs

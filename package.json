@@ -1,0 +1,27 @@
+{
+  "name": "github-radar",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI / 开发工具方向的 GitHub 优质项目发现站",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "fetch": "node scripts/fetch-github.mjs",
+    "classify": "node scripts/classify-llm.mjs",
+    "data": "node scripts/build-data.mjs",
+    "update": "npm run fetch && npm run classify && npm run data"
+  },
+  "dependencies": {
+    "openai": "^6.49.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@vitejs/plugin-react": "^5.0.0",
+    "tailwindcss": "^4.1.11",
+    "vite": "^7.0.0"
+  }
+}

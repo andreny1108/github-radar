@@ -1,0 +1,61 @@
+@import 'tailwindcss';
+
+/* 深浅两套主题跟随系统。变量集中在这里，组件里只引用语义名，
+   以后改配色不用满项目找颜色值。 */
+@theme {
+  --color-surface: #ffffff;
+  --color-surface-2: #f6f7f9;
+  --color-border: #e3e6ea;
+  --color-ink: #16191d;
+  --color-ink-2: #5b6572;
+  --color-ink-3: #8b95a3;
+  --color-accent: #2f6feb;
+  --color-hot: #e5484d;
+  --color-warm: #d97706;
+  --color-mild: #16a34a;
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-surface: #0d1117;
+    --color-surface-2: #161b22;
+    --color-border: #262c35;
+    --color-ink: #e6edf3;
+    --color-ink-2: #9aa5b1;
+    --color-ink-3: #6e7781;
+    --color-accent: #4a8bff;
+    --color-hot: #ff6369;
+    --color-warm: #f59e0b;
+    --color-mild: #3fb950;
+  }
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 侧边栏滚动条在 Windows 上默认很宽很丑，收窄一点 */
+.thin-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}

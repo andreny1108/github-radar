@@ -1,0 +1,101 @@
+name: 每日更新并部署
+
+on:
+  schedule:
+    # UTC 22:00 = 北京时间次日 06:00
+    - cron: '0 22 * * *'
+  workflow_dispatch: # 支持在 Actions 页面手动点按钮触发
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'data/**' # 忽略机器人自己提交的数据，否则会触发循环构建
+
+# 抓取和构建放在同一个 workflow 里串行完成。
+# 不能拆成"提交数据 → 触发另一个部署 workflow"——GitHub 为防死循环，
+# Actions 用内置 token 提交的 commit 不会触发任何 workflow。
+permissions:
+  contents: write # 把更新后的 data/ 提交回仓库
+  pages: write
+  id-token: write
+
+# 手动触发和定时任务撞车时，等前一个跑完而不是直接砍掉
+concurrency:
+  group: update-and-deploy
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: 抓取 GitHub 数据
+        env:
+          # 不要用内置的 GITHUB_TOKEN：它的额度是 1000 次/小时/仓库，抓几百个项目就见底。
+          # 用 fine-grained PAT（只读公开仓库）额度是 5000 次/小时。
+          GH_API_TOKEN: ${{ secrets.GH_API_TOKEN }}
+        run: node scripts/fetch-github.mjs
+
+      - name: 大模型场景分类与中文摘要
+        env:
+          # 没配这两个 secret 也不会失败，脚本会自动降级为规则分类
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'volcengine' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+        run: node scripts/classify-llm.mjs
+
+      - name: 生成前端数据
+        run: node scripts/build-data.mjs
+
+      - name: 提交数据变更
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          # 没有变更时 git commit 会以非 0 退出码失败，这里显式跳过
+          if git diff --staged --quiet; then
+            echo "数据无变化，跳过提交"
+          else
+            git commit -m "chore: 更新项目数据 $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - run: npm run build
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+      # GitHub 会在仓库连续 60 天没有人工活动后自动停用定时任务，
+      # 而机器人的自动提交不算"人工活动"。这里提前 10 天开 issue 提醒。
+      - name: 检查定时任务是否即将被停用
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LAST_HUMAN=$(git log --format='%ct %an' -50 \
+            | grep -v 'github-actions' | head -1 | cut -d' ' -f1)
+          DAYS=$(( ( $(date +%s) - ${LAST_HUMAN:-$(date +%s)} ) / 86400 ))
+          echo "距上次人工提交 $DAYS 天"
+          if [ "$DAYS" -gt 50 ] && \
+             [ "$(gh issue list -S 'in:title 定时任务即将停用' --state open --json number -q length)" = "0" ]; then
+            gh issue create \
+              --title "⏰ 定时任务即将停用，请手动触发一次" \
+              --body "仓库已 $DAYS 天无人工提交。GitHub 会在 60 天时自动停用定时任务。\
+          \n\n**解决办法**：进 Actions 页面点一次 \"Run workflow\"，或者往仓库推任意一个提交。"
+          fi

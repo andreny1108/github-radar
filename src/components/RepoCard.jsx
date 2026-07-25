@@ -1,70 +1,79 @@
-import { formatStars, formatDelta, timeAgo, langColor, deltaHeat } from '../lib/format.js'
+import { formatStars, formatDelta, timeAgo, sparkPoints } from '../lib/format.js'
 
-const HEAT_CLASS = {
-  hot: 'text-hot',
-  warm: 'text-warm',
-  mild: 'text-mild',
-  none: 'text-ink-3',
-}
-
-export default function RepoCard({ repo }) {
-  const [owner, name] = repo.id.split('/')
-  const heat = deltaHeat(repo.d7)
+/**
+ * 蓝图风格的项目卡片。
+ * 四个 <i class="corner"> 是设计系统的定位标记，画在边框外侧。
+ */
+export default function RepoCard({ repo, categoryName }) {
+  const up = repo.d7 !== null && repo.d7 > 0
+  const points = sparkPoints(repo.sp)
 
   return (
     <a
-      // 链接由 id 拼出来，不必在数据里每条都存一遍完整 URL
       href={`https://github.com/${repo.id}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex flex-col gap-2.5 rounded-xl border border-border bg-surface-2 p-4 transition hover:border-accent/50 hover:shadow-lg hover:shadow-black/5"
+      className="card blueprint repo-card"
     >
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="min-w-0 text-[15px] leading-snug font-semibold">
-          <span className="block truncate text-ink-3">{owner}/</span>
-          <span className="block truncate text-ink group-hover:text-accent">{name}</span>
-        </h3>
-        <div className="shrink-0 text-right">
-          <div className="text-[15px] font-semibold tabular-nums text-ink">
-            ★ {formatStars(repo.stars)}
-          </div>
-          <div className={`text-xs font-medium tabular-nums ${HEAT_CLASS[heat]}`}>
-            {formatDelta(repo.d7)}
-            {heat === 'hot' && ' 🔥'}
-          </div>
-        </div>
+      <i className="corner tl" />
+      <i className="corner tr" />
+      <i className="corner bl" />
+      <i className="corner br" />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-2)' }}>
+        <span className="tag tag-outline">{categoryName}</span>
+        {repo.lang && <span className="tag tag-neutral">{repo.lang}</span>}
       </div>
 
-      {/* 优先中文摘要；没有（未配 Claude key）就退回英文原描述 */}
-      <p className="line-clamp-3 min-h-[3.4em] text-[13px] leading-[1.55] text-ink-2">
-        {repo.zh || repo.desc || '（暂无描述）'}
-      </p>
-
-      <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-3">
-        {repo.lang && (
-          <span className="flex items-center gap-1.5">
-            <span
-              className="inline-block size-2.5 rounded-full"
-              style={{ background: langColor(repo.lang) }}
-            />
-            {repo.lang}
-          </span>
-        )}
-        <span title={`最后提交 ${repo.pushed?.slice(0, 10)}`}>更新于 {timeAgo(repo.pushed)}</span>
+      <div className="card-title" style={{ wordBreak: 'break-word' }}>
+        {repo.id.split('/')[1]}
+        <span style={{ display: 'block', fontSize: 12, fontWeight: 400, color: 'var(--color-neutral-600)', fontFamily: 'var(--font-body)' }}>
+          {repo.id.split('/')[0]}
+        </span>
       </div>
 
-      {repo.topics.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {repo.topics.slice(0, 3).map((t) => (
-            <span
-              key={t}
-              className="rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-3"
-            >
-              {t}
-            </span>
-          ))}
+      {/* 优先中文摘要；没有（比如大模型那批失败了）就退回英文原描述 */}
+      <p className="card-body">{repo.zh || repo.desc || '暂无描述'}</p>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 6,
+            fontFamily: 'var(--font-heading)',
+            fontWeight: 600,
+            fontSize: 16,
+            color: 'var(--color-accent-800)',
+          }}
+        >
+          ★ {formatStars(repo.stars)}
         </div>
+        <span className={`tag ${up ? 'tag-accent' : 'tag-neutral'}`}>
+          {up ? `▲ ${formatDelta(repo.d7)}` : '本周 —'}
+        </span>
+      </div>
+
+      {/* 走势图只在攒够 3 天快照后才画：两个点是条直线，没信息量还占地方 */}
+      {points && (
+        <svg viewBox="0 0 100 32" style={{ width: '100%', height: 32, display: 'block' }} aria-hidden="true">
+          <polyline
+            points={points}
+            fill="none"
+            stroke={up ? 'var(--color-accent)' : 'var(--color-neutral-500)'}
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       )}
+
+      <div className="card-meta" style={{ justifyContent: 'space-between' }}>
+        <span title={`最后提交 ${repo.pushed}`}>更新于 {timeAgo(repo.pushed)}</span>
+        <span className="btn btn-ghost" style={{ paddingInline: 0 }}>
+          查看仓库 →
+        </span>
+      </div>
     </a>
   )
 }

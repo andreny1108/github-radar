@@ -9,7 +9,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { ROOT, readJson, writeJson, today } from './lib/env.mjs'
-import { starDelta } from './lib/stars.mjs'
+import { starDelta, recentStars } from './lib/stars.mjs'
 import { CATEGORIES } from './taxonomy.mjs'
 
 const store = readJson('data/repos.json', { repos: {} })
@@ -39,6 +39,7 @@ const repos = active.map((r) => ({
   seen: r.firstSeen,
   d7: starDelta(r, 7),   // 本周新增 star，null = 历史不足（第一天运行时全是 null）
   d30: starDelta(r, 30),
+  sp: recentStars(r, 8), // star 走势迷你图的数据点，不足 3 天为空数组
 }))
 
 // 默认按本周新增排序，前端切换排序时无需重排整个数组
@@ -60,6 +61,9 @@ writeJson(
     updatedAt: store.updatedAt ?? new Date().toISOString(),
     buildDate: today(),
     hasDelta: repos.some((r) => r.d7 !== null), // 前端据此决定"本周新星"排序是否可用
+    // 首屏三块数据牌用的统计
+    newToday: repos.filter((r) => r.seen === today()).length,
+    totalActive: repos.length,
     categories: CATEGORIES.map((c) => ({ ...c, count: catCount[c.id] ?? 0 })).filter(
       (c) => c.count > 0,
     ),

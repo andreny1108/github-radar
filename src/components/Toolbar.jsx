@@ -1,79 +1,97 @@
 import { SORTS } from '../lib/filter.js'
 
+/**
+ * 分类 chips + 排序 + 语言筛选。
+ *
+ * 原设计里没有语言筛选（它只有 14 个假数据）。真实站有近三千个项目、
+ * 五十多种语言，这个筛选很有用，所以补了一个 select——用设计系统的
+ * .input 类，视觉上和其他控件是一套。
+ */
 export default function Toolbar({
-  query,
-  onQuery,
+  categories,
+  counts,
+  total,
+  active,
+  onCategory,
   sort,
   onSort,
   lang,
   onLang,
   languages,
   hasDelta,
-  onMenu,
 }) {
+  const chips = [{ id: null, name: '全部', count: total }, ...categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    count: counts[c.id] ?? 0,
+  }))]
+
   return (
-    <div className="sticky top-0 z-20 -mx-4 mb-4 border-b border-border bg-surface/85 px-4 py-3 backdrop-blur md:-mx-6 md:px-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={onMenu}
-          className="rounded-lg border border-border px-2.5 py-2 text-sm md:hidden"
-          aria-label="打开分类导航"
-        >
-          ☰
-        </button>
+    <section
+      className="gr-toolbar"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 'var(--space-4)',
+        flexWrap: 'wrap',
+        marginBottom: 'var(--space-4)',
+        padding: 'var(--space-3) 0',
+        borderTop: '1px solid var(--color-divider)',
+        borderBottom: '1px solid var(--color-divider)',
+      }}
+    >
+      <div className="chip-row">
+        {chips.map((chip) => (
+          <button
+            key={chip.id ?? 'all'}
+            type="button"
+            onClick={() => onCategory(chip.id)}
+            className={`btn ${chip.id === active ? 'btn-primary' : 'btn-secondary'}`}
+            // 数量为 0 的分类淡出但不隐藏——隐藏会让工具栏在搜索时不停跳动
+            style={chip.count === 0 && chip.id !== active ? { opacity: 0.45 } : undefined}
+          >
+            {chip.name}
+            <span style={{ opacity: 0.6, fontSize: 11, marginLeft: 4 }}>{chip.count}</span>
+          </button>
+        ))}
+      </div>
 
-        <div className="relative min-w-45 flex-1">
-          <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-3">
-            🔍
-          </span>
-          <input
-            value={query}
-            onChange={(e) => onQuery(e.target.value)}
-            placeholder="搜索项目名、描述、标签…"
-            className="w-full rounded-lg border border-border bg-surface-2 py-2 pr-3 pl-9 text-sm outline-none placeholder:text-ink-3 focus:border-accent"
-          />
-        </div>
-
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
         <select
-          value={sort}
-          onChange={(e) => onSort(e.target.value)}
-          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+          className="input"
+          value={lang ?? ''}
+          onChange={(e) => onLang(e.target.value || null)}
+          style={{ width: 'auto', minWidth: 130 }}
+          aria-label="按编程语言筛选"
         >
-          {SORTS.map((s) => (
-            <option key={s.id} value={s.id} disabled={s.id === 'trending' && !hasDelta}>
-              {s.name}
-              {s.id === 'trending' && !hasDelta ? '（明日可用）' : ''}
+          <option value="">全部语言</option>
+          {languages.map((l) => (
+            <option key={l.name} value={l.name}>
+              {l.name}（{l.count}）
             </option>
           ))}
         </select>
-      </div>
 
-      {/* 语言 chips：只列最常见的，避免一行几十个把工具栏撑爆 */}
-      <div className="thin-scroll mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
-        <Chip active={!lang} onClick={() => onLang(null)}>
-          全部语言
-        </Chip>
-        {languages.slice(0, 12).map((l) => (
-          <Chip key={l.name} active={lang === l.name} onClick={() => onLang(lang === l.name ? null : l.name)}>
-            {l.name} <span className="opacity-60">{l.count}</span>
-          </Chip>
-        ))}
+        <div className="seg">
+          {SORTS.map((s) => {
+            const disabled = s.id === 'trending' && !hasDelta
+            return (
+              <button
+                key={s.id}
+                type="button"
+                className="seg-opt"
+                aria-pressed={s.id === sort}
+                disabled={disabled}
+                title={disabled ? '需要至少两天的数据快照，明天就有了' : undefined}
+                onClick={() => onSort(s.id)}
+              >
+                {s.name}
+              </button>
+            )
+          })}
+        </div>
       </div>
-    </div>
-  )
-}
-
-function Chip({ active, onClick, children }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`shrink-0 rounded-full border px-3 py-1 text-xs whitespace-nowrap transition ${
-        active
-          ? 'border-accent bg-accent/12 text-accent'
-          : 'border-border text-ink-2 hover:border-ink-3'
-      }`}
-    >
-      {children}
-    </button>
+    </section>
   )
 }

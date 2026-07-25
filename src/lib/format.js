@@ -9,8 +9,7 @@ export function formatStars(n) {
 
 /** star 增量：null 表示历史不足（第一天运行），显示为 "—" */
 export function formatDelta(d) {
-  if (d === null || d === undefined) return '—'
-  if (d <= 0) return '—'
+  if (d === null || d === undefined || d <= 0) return '—'
   return `+${formatStars(d)}`
 }
 
@@ -26,47 +25,23 @@ export function timeAgo(iso) {
 }
 
 /**
- * 语言色点。用的是 GitHub 官方 linguist 的配色，
- * 开发者对这套颜色有肌肉记忆，自己另配一套反而认知成本更高。
+ * 把 star 历史折算成 SVG polyline 的点串（viewBox 100×32）。
+ *
+ * 走的是"每张卡自己归一化"：把这个仓库自身的最小值贴底、最大值贴顶。
+ * 不这么做的话，10 万 star 的项目涨 2000 和 500 star 的项目涨 200，
+ * 在同一个绝对坐标系里后者会是一条完全看不出起伏的平线。
+ *
+ * 数据点少于 3 个返回 null（第一周还没攒够快照），卡片据此不画图。
  */
-const LANG_COLORS = {
-  Python: '#3572A5',
-  TypeScript: '#3178c6',
-  JavaScript: '#f1e05a',
-  Go: '#00ADD8',
-  Rust: '#dea584',
-  Java: '#b07219',
-  'C++': '#f34b7d',
-  C: '#555555',
-  'C#': '#178600',
-  Ruby: '#701516',
-  PHP: '#4F5D95',
-  Swift: '#F05138',
-  Kotlin: '#A97BFF',
-  Shell: '#89e051',
-  HTML: '#e34c26',
-  CSS: '#563d7c',
-  Vue: '#41b883',
-  Svelte: '#ff3e00',
-  Jupyter: '#DA5B0B',
-  'Jupyter Notebook': '#DA5B0B',
-  Dart: '#00B4AB',
-  Lua: '#000080',
-  Zig: '#ec915c',
-  Elixir: '#6e4a7e',
-  Haskell: '#5e5086',
-  Scala: '#c22d40',
-  Cuda: '#3A4E3A',
-  MDX: '#fcb32c',
-  Dockerfile: '#384d54',
-}
+export function sparkPoints(values) {
+  if (!values || values.length < 3) return null
 
-export const langColor = (lang) => LANG_COLORS[lang] ?? '#8b949e'
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const range = max - min || 1
+  const step = 100 / (values.length - 1)
 
-/** 增量热度：决定卡片上增量数字的颜色强度 */
-export function deltaHeat(d) {
-  if (!d || d <= 0) return 'none'
-  if (d >= 1000) return 'hot'
-  if (d >= 300) return 'warm'
-  return 'mild'
+  return values
+    .map((v, i) => `${(i * step).toFixed(1)},${(30 - ((v - min) / range) * 28).toFixed(1)}`)
+    .join(' ')
 }

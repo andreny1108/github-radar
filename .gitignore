@@ -7,3 +7,9 @@ dist/
 
 # 构建产物：由 scripts/build-data.mjs 从 data/ 生成，不进版本库
 public/data/repos.json
+
+# 从 Claude Design 导出的设计稿源文件（400KB+ 的打包 HTML）。
+# 留在本地当参考可以，但不该进仓库——会被一起部署出去，还永久占着 git 历史。
+*.dc.html
+GitHub Radar (Standalone).html
+

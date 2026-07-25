@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 
 // GitHub Pages 会把站点挂在 https://<用户名>.github.io/<仓库名>/ 下，
 // 所以生产构建必须带上 /<仓库名>/ 前缀，否则 JS/CSS 全部 404、页面白屏。
@@ -10,7 +9,8 @@ const REPO_NAME = 'github-radar'
 
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? (process.env.VITE_BASE ?? `/${REPO_NAME}/`) : '/',
-  plugins: [react(), tailwindcss()],
+  // 视觉全部由 src/index.css（Industry 设计系统）承担，没有用 Tailwind
+  plugins: [react()],
   server: {
     port: 5173,
     open: true,

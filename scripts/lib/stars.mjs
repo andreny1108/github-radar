@@ -43,6 +43,16 @@ export function pushStarHistory(repo, date, stars) {
 }
 
 /**
+ * 最近 n 条快照的 star 绝对值，用于前端画走势迷你图。
+ * 少于 3 条时返回空数组——两个点画出来是条直线，没有信息量还占地方。
+ */
+export function recentStars(repo, n = 8) {
+  const parts = readHistory(repo)
+  if (parts.length < 3) return []
+  return parts.slice(-n).map((p) => parseEntry(p).s)
+}
+
+/**
  * 最近 n 天的 star 增量。
  *
  * 历史不足 2 条（第一天运行）时返回 null —— 前端据此显示 "—"，
